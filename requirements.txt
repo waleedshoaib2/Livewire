@@ -1,0 +1,4 @@
+praw
+supabase
+python-dotenv
+discord.py
