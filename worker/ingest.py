@@ -165,7 +165,14 @@ if __name__ == "__main__":
     try:
         supabase = init_supabase()
         reddit = init_reddit()
-        process_posts(reddit, supabase)
+        try:
+             process_posts(reddit, supabase)
+        except Exception as e:
+             if "404" in str(e):
+                 print("❌ Error: 404 Not Found. One of your subreddits might be banned or misspelled.")
+                 print("   Check your 'subreddits' table. (Note: 'forehire' is a common typo for 'forhire')")
+             else:
+                 raise e
         print("Ingestion run completed.")
     except Exception as e:
         print(f"Fatal error: {e}")
