@@ -1,7 +1,6 @@
 "use client"
 
 import PostTable from '../components/PostTable'
-import SubredditManager from '../components/SubredditManager'
 import { Activity, Bell, CheckCircle } from 'lucide-react'
 
 export default function Home() {
@@ -54,20 +53,12 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Main Content Area (2/3 width) */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-              <h3 className="text-lg font-bold">Recent Leads</h3>
-            </div>
-            <PostTable />
+      <div className="space-y-6">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 dark:border-gray-800">
+            <h3 className="text-lg font-bold">Recent Leads</h3>
           </div>
-        </div>
-
-        {/* Sidebar Area (1/3 width) */}
-        <div className="space-y-6">
-          <SubredditManager />
+          <PostTable />
         </div>
       </div>
     </div>
