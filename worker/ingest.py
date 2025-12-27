@@ -4,6 +4,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import re
 import time
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -14,6 +15,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "Livewire by u/your_username")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID")
 
 def init_supabase() -> Client:
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -33,6 +36,45 @@ def fetch_active_subreddits(supabase: Client):
     response = supabase.table("subreddits").select("name").eq("active", True).execute()
     return [row["name"] for row in response.data]
 
+def send_discord_notification(post_data):
+    if not DISCORD_TOKEN or not DISCORD_CHANNEL_ID:
+        print("❌ Discord credentials missing. Skipping notification.")
+        return False
+
+    url = f"https://discord.com/api/v10/channels/{DISCORD_CHANNEL_ID}/messages"
+    headers = {
+        "Authorization": f"Bot {DISCORD_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    # Create Embed
+    embed = {
+        "title": post_data["title"],
+        "url": post_data["url"],
+        "description": post_data["body"][:200] + "...",
+        "color": 0xFF5733, # Orange
+        "author": {
+            "name": f"r/{post_data['subreddit']} • u/{post_data['author']}"
+        },
+        "fields": [
+            {"name": "Keywords", "value": ", ".join(post_data["matched_keywords"]), "inline": True},
+            {"name": "Score", "value": str(post_data["score"]), "inline": True}
+        ]
+    }
+
+    payload = {
+        "embeds": [embed]
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        print(f"📢 Notification sent for {post_data['reddit_id']}")
+        return True
+    except Exception as e:
+        print(f"❌ Error sending Discord notification: {e}")
+        return False
+
 def process_posts(reddit, supabase: Client):
     subreddits = fetch_active_subreddits(supabase)
     if not subreddits:
@@ -45,14 +87,7 @@ def process_posts(reddit, supabase: Client):
     
     subreddit = reddit.subreddit(subreddit_query)
     
-    # Strong Regex for "Client Looking for Dev/Service" (Leads)
-    # Excludes "For Hire" (Self-promotion) generally by focusing on "hiring/need" verbs.
-    # Matches:
-    # - "hiring a <role>"
-    # - "need a <role>"
-    # - "looking for <role>"
-    # - "budget: $xxx"
-    # - "paid project"
+    # Strong Regex from previous step
     JOB_PATTERN = re.compile(r'(?i)\b('
                              r'hiring|looking\s+for|seeking|need\s+(?:a|an)?|'
                              r'who\s+can|want\s+to\s+(?:make|build|create)|'
@@ -72,29 +107,22 @@ def process_posts(reddit, supabase: Client):
 
     # Fetch new posts
     for post in subreddit.new(limit=25):
-        # 1. Time Filter: Only allow posts created in the last 10 minutes
+        # Time Filter
         age = current_time - post.created_utc
         if age > TEN_MINUTES:
             print(f"Skipping old post: {post.title} ({int(age/60)} mins ago)")
             continue
         
-        # 2. Regex Filter
+        # Regex Filter
         text_to_search = (post.title + " " + post.selftext).lower()
         matches = JOB_PATTERN.findall(text_to_search)
-        
-        # Unique matches only (flatten tuples if regex has groups, but findall with groups returns tuples)
-        # Our regex has 2 capturing groups, so findall returns [('hiring', 'developer'), ...]
-        # We want to match if ANY match exists.
         
         if not matches:
              print(f"Skipping (No Match): {post.title}")
              continue
              
-        # Flatten matches for display
         matched_keywords = list(set([m[0] + " " + m[1] for m in matches if isinstance(m, tuple)]))
-        if not matched_keywords: 
-            # Fallback if regex structure changes or simple match
-            matched_keywords = ["matched pattern"]
+        if not matched_keywords: matched_keywords = ["matched pattern"]
 
         print(f"✅ MATCH: {post.title} ({post.subreddit.display_name})")
         match_score = len(matches) * 1.0 
@@ -103,7 +131,7 @@ def process_posts(reddit, supabase: Client):
             "reddit_id": post.id,
             "subreddit": post.subreddit.display_name,
             "title": post.title,
-            "body": post.selftext[:1000] if post.selftext else "", # Truncate body if needed
+            "body": post.selftext[:1000] if post.selftext else "",
             "author": str(post.author),
             "url": post.url,
             "score": post.score,
@@ -115,14 +143,23 @@ def process_posts(reddit, supabase: Client):
         }
         
         try:
-            # Upsert into Supabase (ignore duplicates based on reddit_id unique constraint)
-            # We use ignore_duplicates=False to update existing records if needed, 
-            # but usually for 'new' posts we just want to insert. 
-            # However, onconflict on reddit_id is better.
-            supabase.table("posts").upsert(post_data, on_conflict="reddit_id").execute()
-            print(f"Saved: {post.id}")
+            # Check if exists first to avoid double notification on re-run
+            existing = supabase.table("posts").select("id").eq("reddit_id", post.id).execute()
+            if not existing.data:
+                # Send Notification DIRECTLY
+                sent = send_discord_notification(post_data)
+                post_data["notified"] = sent
+                if sent:
+                     post_data["notified_at"] = "now()"
+
+                # Insert into DB
+                supabase.table("posts").insert(post_data).execute()
+                print(f"Saved: {post.id}")
+            else:
+                print(f"Exists: {post.id}")
+
         except Exception as e:
-            print(f"Error saving post {post.id}: {e}")
+            print(f"Error processing post {post.id}: {e}")
 
 if __name__ == "__main__":
     try:
