@@ -82,13 +82,7 @@ def process_posts(reddit, supabase: Client):
         print("No active subreddits found.")
         return
 
-    # Join subreddits with a plus sign for a multi-reddit query
-    subreddit_query = "+".join(subreddits)
-    print(f"Monitoring subreddits: {subreddit_query}")
-    
-    subreddit = reddit.subreddit(subreddit_query)
-    
-    # Strong Regex from previous step
+    # Regex definition (moved outside loop for efficiency)
     JOB_PATTERN = re.compile(r'(?i)\b('
                              r'hiring|looking\s+for|seeking|need\s+(?:a|an)?|'
                              r'who\s+can|want\s+to\s+(?:make|build|create)|'
@@ -104,63 +98,81 @@ def process_posts(reddit, supabase: Client):
                              r')\b')
 
     current_time = time.time()
-    TEN_MINUTES = 600
+    MAX_WINDOW = 8 * 60 * 60  # 8 hours
+    STD_WINDOW = 3 * 60 * 60  # 3 hours
 
-    # Fetch new posts
-    for post in subreddit.new(limit=100):
-        # Time Filter
-        age = current_time - post.created_utc
-        if age > TEN_MINUTES:
-            print(f"Skipping old post: {post.title} ({int(age/60)} mins ago)")
-            continue
-        
-        # Regex Filter
-        text_to_search = (post.title + " " + post.selftext).lower()
-        matches = JOB_PATTERN.findall(text_to_search)
-        
-        if not matches:
-             print(f"Skipping (No Match): {post.title}")
-             continue
-             
-        matched_keywords = list(set([m[0] + " " + m[1] for m in matches if isinstance(m, tuple)]))
-        if not matched_keywords: matched_keywords = ["matched pattern"]
+    print(f"Processing {len(subreddits)} subreddits...")
 
-        print(f"✅ MATCH: {post.title} ({post.subreddit.display_name})")
-        match_score = len(matches) * 1.0 
-
-        post_data = {
-            "reddit_id": post.id,
-            "subreddit": post.subreddit.display_name,
-            "title": post.title,
-            "body": post.selftext[:1000] if post.selftext else "",
-            "author": str(post.author),
-            "url": post.url,
-            "score": post.score,
-            "num_comments": post.num_comments,
-            "created_utc": post.created_utc,
-            "matched_keywords": matched_keywords,
-            "match_score": match_score,
-            "notified": False, 
-        }
-        
+    for sub_name in subreddits:
+        print(f"Checking r/{sub_name}...")
         try:
-            # Check if exists first to avoid double notification on re-run
-            existing = supabase.table("posts").select("id").eq("reddit_id", post.id).execute()
-            if not existing.data:
-                # Send Notification DIRECTLY
-                sent = send_discord_notification(post_data)
-                post_data["notified"] = sent
-                if sent:
-                     post_data["notified_at"] = "now()"
+            subreddit = reddit.subreddit(sub_name)
+            
+            # Fetch latest 15 posts per subreddit
+            for post in subreddit.new(limit=15):
+                # Time Filter
+                age = current_time - post.created_utc
+                
+                # 1. Hard cutoff: If older than 8 hours, skip entirely
+                if age > MAX_WINDOW:
+                    # print(f"  Skipping old post: {post.title} ({int(age/60)} mins ago)")
+                    continue
 
-                # Insert into DB
-                supabase.table("posts").insert(post_data).execute()
-                print(f"Saved: {post.id}")
-            else:
-                print(f"Exists: {post.id}")
+                # 2. Logic: If between 3-8 hours, only keep if it has few comments (undiscovered)
+                if age > STD_WINDOW:
+                    if post.num_comments > 5:
+                        # print(f"  Skipping saturated post: {post.title}")
+                        continue
+                
+                # Regex Filter
+                text_to_search = (post.title + " " + post.selftext).lower()
+                matches = JOB_PATTERN.findall(text_to_search)
+                
+                if not matches:
+                     continue
+                     
+                matched_keywords = list(set([m[0] + " " + m[1] for m in matches if isinstance(m, tuple)]))
+                if not matched_keywords: matched_keywords = ["matched pattern"]
+
+                print(f"  ✅ MATCH: {post.title}")
+                match_score = len(matches) * 1.0 
+
+                post_data = {
+                    "reddit_id": post.id,
+                    "subreddit": post.subreddit.display_name,
+                    "title": post.title,
+                    "body": post.selftext[:1000] if post.selftext else "",
+                    "author": str(post.author),
+                    "url": post.url,
+                    "score": post.score,
+                    "num_comments": post.num_comments,
+                    "created_utc": post.created_utc,
+                    "matched_keywords": matched_keywords,
+                    "match_score": match_score,
+                    "notified": False, 
+                }
+                
+                try:
+                    # Check if exists first to avoid double notification on re-run
+                    existing = supabase.table("posts").select("id").eq("reddit_id", post.id).execute()
+                    if not existing.data:
+                        # Send Notification DIRECTLY
+                        sent = send_discord_notification(post_data)
+                        post_data["notified"] = sent
+                        if sent:
+                             post_data["notified_at"] = "now()"
+
+                        # Insert into DB
+                        supabase.table("posts").insert(post_data).execute()
+                        print(f"    Saved: {post.id}")
+                    else:
+                        print(f"    Exists: {post.id}")
+
+                except Exception as e:
+                    print(f"    Error processing post {post.id}: {e}")
 
         except Exception as e:
-            print(f"Error processing post {post.id}: {e}")
+            print(f"❌ Error accessing r/{sub_name}: {e}")
 
 if __name__ == "__main__":
     try:
