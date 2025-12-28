@@ -34,7 +34,8 @@ def init_reddit():
 
 def fetch_active_subreddits(supabase: Client):
     response = supabase.table("subreddits").select("name").eq("active", True).execute()
-    return [row["name"] for row in response.data]
+    # Sanitize names just in case 'r/' is in the DB
+    return [row["name"].replace("r/", "").strip() for row in response.data]
 
 def send_discord_notification(post_data):
     if not DISCORD_TOKEN or not DISCORD_CHANNEL_ID:

@@ -21,18 +21,20 @@ export default function SubredditManager() {
         fetchSubs()
     }, [])
 
-    const addSubreddit = async (e: React.FormEvent) => {
+    const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!newSub) return
         setLoading(true)
 
-        // Check if exists
+        // Sanitize input: remove 'r/' prefix if present
+        const cleanName = newSub.replace(/^r\//, '').replace(/^\//, '').trim()
+
         const { error } = await supabase
             .from('subreddits')
-            .insert([{ name: newSub.trim(), active: true, added_via: 'frontend' }])
+            .insert([{ name: cleanName, active: true, added_via: 'frontend' }])
 
         if (error) {
-            alert("Error adding subreddit: " + error.message)
+            console.error('Error adding subreddit:', error)
         } else {
             setNewSub('')
             fetchSubs()
@@ -57,7 +59,7 @@ export default function SubredditManager() {
                 <Zap className="w-5 h-5 text-yellow-500" /> Managed Subreddits
             </h2>
 
-            <form onSubmit={addSubreddit} className="flex gap-2 mb-6">
+            <form onSubmit={handleAdd} className="flex gap-2 mb-6">
                 <input
                     type="text"
                     value={newSub}

@@ -36,10 +36,14 @@ export default function Sidebar() {
                     <Layers className="w-5 h-5" />
                     Subreddits
                 </Link>
-                <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-900 hover:text-gray-900 dark:hover:text-white transition-colors text-left">
+                <Link href="/analytics" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white text-gray-500 transition-colors">
                     <BarChart3 className="w-5 h-5" />
                     Analytics
-                </button>
+                </Link>
+                <Link href="/settings" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white text-gray-500 transition-colors">
+                    <Settings className="w-5 h-5" />
+                    Settings
+                </Link>
 
                 {/* Theme Toggle */}
                 <button
