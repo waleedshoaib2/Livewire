@@ -29,7 +29,10 @@ def seed():
         # High-Pay Niche Tech Stacks
         "rust", "golang", "kubernetes", "terraform", "ansible", "rails", "haskell", "linuxadmin",
         # Geographic & Specialized Hubs
-        "developersIndia", "cscareerquestionsEU", "cscareerquestionsCAD", "developersLatinAmerica"
+        "developersIndia", "cscareerquestionsEU", "cscareerquestionsCAD", "developersLatinAmerica",
+        # Livewire Suggestions (High-Value Tech)
+        "reactjs", "vuejs", "javascript", "typescript", "node", "aws", "azure", 
+        "devops", "sysadmin", "freelance", "remote", "digitalnomad", "sales", "marketing"
     ]
     
     print(f"Seeding {len(subreddits)} subreddits...")
@@ -44,8 +47,6 @@ def seed():
             print("✅")
         except Exception as e:
             print(f"❌ Error: {e}")
-    except Exception as e:
-        print(f"Error seeding database: {e}")
 
 if __name__ == "__main__":
     seed()
