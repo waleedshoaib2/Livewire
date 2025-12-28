@@ -106,7 +106,7 @@ def process_posts(reddit, supabase: Client):
     TEN_MINUTES = 600
 
     # Fetch new posts
-    for post in subreddit.new(limit=25):
+    for post in subreddit.new(limit=100):
         # Time Filter
         age = current_time - post.created_utc
         if age > TEN_MINUTES:
