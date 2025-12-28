@@ -14,13 +14,36 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def seed():
-    subreddit = "python"
-    print(f"Adding r/{subreddit} to database...")
-    try:
-        data = {"name": subreddit, "active": True, "added_via": "seed"}
-        # Check if exists first (or rely on unique constraint fail)
-        supabase.table("subreddits").upsert(data, on_conflict="name").execute()
-        print(f"Success! Added r/{subreddit}.")
+    subreddits = [
+        # Original List
+        "AI_Agents", "aipromptprogramming", "androiddev", "appdev", "AppDevelopers",
+        "AppDevelopment", "ArtificialInelligence", "Backend", "B2BForHire", "coding",
+        "DeveloperJobs", "expressjs", "FlutterDev", "forhire", "freelance_forhire",
+        "googlecloud", "hireaprogrammer", "jobbit", "LangChain", "MachineLearning",
+        "MachineLearningJobs", "microsaas", "n8n", "n8n_ai_agents", "programmingcirclejerk",
+        "programminghorror", "PythonJobs", "remotepython", "remotework", "softwaretesting",
+        "vercel", "Supabase", "WebDeveloper", "WebDeveloperJobs", "WebDevJobs",
+        "WorkOnline", "webscraping",
+        # Founder/Entrepreneur Hubs
+        "startups", "indiehackers", "SideProject", "indianstartups",
+        # High-Pay Niche Tech Stacks
+        "rust", "golang", "kubernetes", "terraform", "ansible", "rails", "haskell", "linuxadmin",
+        # Geographic & Specialized Hubs
+        "developersIndia", "cscareerquestionsEU", "cscareerquestionsCAD", "developersLatinAmerica"
+    ]
+    
+    print(f"Seeding {len(subreddits)} subreddits...")
+    
+    for sub in subreddits:
+        print(f"Adding r/{sub}...", end=" ")
+        try:
+            # We strip 'r/' and whitespace just in case, though this list looks clean
+            clean_name = sub.replace("r/", "").strip()
+            data = {"name": clean_name, "active": True, "added_via": "seed"}
+            supabase.table("subreddits").upsert(data, on_conflict="name").execute()
+            print("✅")
+        except Exception as e:
+            print(f"❌ Error: {e}")
     except Exception as e:
         print(f"Error seeding database: {e}")
 
